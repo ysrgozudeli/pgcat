@@ -46,15 +46,16 @@ impl Sharder {
     }
 
     /// Compute the shard given sharding key.
-    pub fn shard(&self, key: i64) -> usize {
+    pub fn shard(&self, key: impl Into<String>) -> usize {
         match self.sharding_function {
-            ShardingFunction::PgBigintHash => self.pg_bigint_hash(key),
-            ShardingFunction::Sha1 => self.sha1(key),
-             ShardingFunction::UuidFirstDigit => {
-            // Convert the key into a UUID and call the uuid_first_digit function
-            let uuid = key.into().parse::<Uuid>().expect("Invalid UUID format");
-            self.uuid_first_digit(uuid)
-        },
+            ShardingFunction::PgBigintHash => self.pg_bigint_hash(key.into().parse::<i64>().unwrap()),
+            ShardingFunction::Sha1 => self.sha1(key.into()),
+            ShardingFunction::UuidFirstDigit => {
+                // Convert the key into a UUID and call the uuid_first_digit function
+                let key_str: String = key.into(); // Ensure key converts to String
+                let uuid = key_str.parse::<Uuid>().expect("Invalid UUID format");
+                self.uuid_first_digit(uuid)
+            },
         }
     }
 
