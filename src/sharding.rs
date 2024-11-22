@@ -50,7 +50,11 @@ impl Sharder {
         match self.sharding_function {
             ShardingFunction::PgBigintHash => self.pg_bigint_hash(key),
             ShardingFunction::Sha1 => self.sha1(key),
-            ShardingFunction::UuidFirstDigit => panic!("Use `shard_uuid` for UUID keys."),
+             ShardingFunction::UuidFirstDigit => {
+            // Convert the key into a UUID and call the uuid_first_digit function
+            let uuid = key.into().parse::<Uuid>().expect("Invalid UUID format");
+            self.uuid_first_digit(uuid)
+        },
         }
     }
 
