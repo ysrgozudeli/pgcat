@@ -1,6 +1,7 @@
 use serde_derive::{Deserialize, Serialize};
 /// Implements various sharding functions.
 use sha1::{Digest, Sha1};
+use uuid::Uuid;
 
 /// See: <https://github.com/postgres/postgres/blob/27b77ecf9f4d5be211900eda54d8155ada50d696/src/include/catalog/partition.h#L20>.
 const PARTITION_HASH_SEED: u64 = 0x7A5B22367996DCFD;
@@ -12,6 +13,8 @@ pub enum ShardingFunction {
     PgBigintHash,
     #[serde(alias = "sha1", alias = "Sha1")]
     Sha1,
+    #[serde(alias = "uuid_first_digit", alias = "UuidFirstDigit")]
+    UuidFirstDigit,
 }
 
 impl std::fmt::Display for ShardingFunction {
@@ -19,6 +22,7 @@ impl std::fmt::Display for ShardingFunction {
         match self {
             ShardingFunction::PgBigintHash => write!(f, "pg_bigint_hash"),
             ShardingFunction::Sha1 => write!(f, "sha1"),
+            ShardingFunction::UuidFirstDigit => write!(f, "uuid_first_digit"),
         }
     }
 }
@@ -46,6 +50,7 @@ impl Sharder {
         match self.sharding_function {
             ShardingFunction::PgBigintHash => self.pg_bigint_hash(key),
             ShardingFunction::Sha1 => self.sha1(key),
+            ShardingFunction::UuidFirstDigit => panic!("Use `shard_uuid` for UUID keys."),
         }
     }
 
@@ -75,6 +80,21 @@ impl Sharder {
         let key = i64::from_str_radix(&hex[hex.len() - 8..], 16).unwrap() as usize;
 
         key % self.shards
+    }
+
+     /// Compute the shard for a UUID key.
+     pub fn shard_uuid(&self, uuid: Uuid) -> usize {
+        match self.sharding_function {
+            ShardingFunction::UuidFirstDigit => self.uuid_first_digit(uuid),
+            _ => panic!("Use `shard` for non-UUID keys."),
+        }
+    }
+      /// UUID First Digit: Use the first digit of the UUID to determine the shard.
+    fn uuid_first_digit(&self, uuid: Uuid) -> usize {
+        let uuid_str = uuid.to_string();
+        let first_digit = uuid_str.chars().find(|c| c.is_ascii_digit()).unwrap_or('0');
+        let digit_value = first_digit.to_digit(10).unwrap_or(0);
+        (digit_value as usize) % self.shards
     }
 
     #[inline]
@@ -212,5 +232,18 @@ mod test {
         for (i, id) in ids.iter().enumerate() {
             assert_eq!(sharder.shard(*id), shards[i]);
         }
+    }
+
+    #[test]
+    fn test_uuid_first_digit() {
+        let sharder = Sharder::new(5, ShardingFunction::UuidFirstDigit);
+
+        let uuid1 = Uuid::parse_str("1a2b3c4d-5678-9101-1121-314151617181").unwrap();
+        let uuid2 = Uuid::parse_str("2a2b3c4d-5678-9101-1121-314151617181").unwrap();
+        let uuid3 = Uuid::parse_str("0a2b3c4d-5678-9101-1121-314151617181").unwrap();
+
+        assert_eq!(sharder.shard_uuid(uuid1), 1);
+        assert_eq!(sharder.shard_uuid(uuid2), 2);
+        assert_eq!(sharder.shard_uuid(uuid3), 0);
     }
 }
