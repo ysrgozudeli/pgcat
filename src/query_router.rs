@@ -18,6 +18,7 @@ use crate::messages::BytesMutReader;
 use crate::plugins::{Intercept, Plugin, PluginOutput, QueryLogger, TableAccess};
 use crate::pool::PoolSettings;
 use crate::sharding::Sharder;
+use uuid::Uuid;
 
 use std::collections::BTreeSet;
 use std::io::Cursor;
