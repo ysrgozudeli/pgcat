@@ -668,7 +668,7 @@ impl QueryRouter {
     ///
     /// N.B.: Only supports anonymous prepared statements since we don't
     /// keep a cache of them in PgCat.
-    pub fn infer_shard_from_bind(&mut self, message: &BytesMut) -> bool {
+  pub fn infer_shard_from_bind(&mut self, message: &BytesMut) -> bool {
         if !self.pool_settings.query_parser_read_write_splitting {
             return false; // Nothing to do
         }
@@ -774,6 +774,24 @@ impl QueryRouter {
                         2 => message_cursor.get_i16() as i64,
                         4 => message_cursor.get_i32() as i64,
                         8 => message_cursor.get_i64(),
+                        16 => {
+                            // Parse the next 16 bytes as a UUID
+                            if message_cursor.remaining() >= 16 {
+                                let mut uuid_bytes = [0u8; 16];
+                                message_cursor.copy_to_slice(&mut uuid_bytes);
+
+                                // Extract the first hexadecimal digit's decimal value
+                                let first_hex_digit = uuid_bytes[0] >> 4; // Upper 4 bits
+                                debug!(
+                                    "Parsed UUID for sharding, first hex digit's decimal value: {}",
+                                    first_hex_digit
+                                );
+                                first_hex_digit as i64
+                            } else {
+                                error!("Not enough bytes for UUID");
+                                continue;
+                            }
+                        }
                         _ => {
                             error!(
                                 "Got wrong length for integer type parameter in bind: {}",
